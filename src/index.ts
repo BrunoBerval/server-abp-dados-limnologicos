@@ -42,6 +42,6 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 3000;
 
 // Inicializa o servidor na porta definida
-app.listen(PORT, function () => {
+app.listen(PORT, () => {
   console.log(`Servidor rodando em http://localhost:${PORT}`);
 });
