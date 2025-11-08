@@ -39,7 +39,7 @@ app.use((_req: Request, res: Response) => {
 app.use(errorHandler);
 
 // Define a porta utilizada pelo servidor
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 // Inicializa o servidor na porta definida
 app.listen(PORT, "0.0.0.0", () => {
