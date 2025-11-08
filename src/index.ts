@@ -5,19 +5,18 @@ import { errorHandler } from "./middlewares/errorHandler";
 import cors from "cors";
 //import { corsOptions } from "./configs/corsConfig";
 
-// Carrega as variáveis de ambiente definidas no arquivo .env
-dotenv.config();
+// Carrega .env somente local
+if(process.env.NODE_ENV !== 'production'){
+  dotenv.config();
+  console.log("Variáveis de ambiente carregadas do .env");
+}
 
 // Inicializa a aplicação Express
 const app = express();
 
 // habilitar CORS em produção
 //app.use(cors(corsOptions));
-
 app.use(cors())
-
-// Define a porta utilizada pelo servidor
-const PORT = process.env.PORT || 3000;
 
 // Middleware para permitir o envio de dados em formato JSON no corpo das requisições
 app.use(express.json());
@@ -39,7 +38,10 @@ app.use((_req: Request, res: Response) => {
 // middleware de erro sempre por último
 app.use(errorHandler);
 
+// Define a porta utilizada pelo servidor
+const PORT = process.env.PORT || 3000;
+
 // Inicializa o servidor na porta definida
-app.listen(PORT, function () {
-  console.log(`Servidor rodando em http://localhost:${process.env.HOST_PORT}`);
+app.listen(PORT, () {
+  console.log(`Servidor rodando em http://localhost:${PORT}`);
 });
