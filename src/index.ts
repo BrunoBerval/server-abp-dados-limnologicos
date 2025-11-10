@@ -38,5 +38,12 @@ app.use((_req: Request, res: Response) => {
 // middleware de erro sempre por último
 app.use(errorHandler);
 
+// Define a porta: O Render VAI fornecer process.env.PORT
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`Servidor rodando na porta ${PORT}`);
+});
+
 // Exporta o app para a Vercel (isso transforma o Express em uma Serverless Function)
 export default app;
