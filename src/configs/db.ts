@@ -1,7 +1,17 @@
 import dotenv from "dotenv";
-dotenv.config();
+import { Pool, PoolConfig } from "pg";
 
-import { Pool } from "pg";
+// Carrega .env se não estiver em produção
+if (process.env.NODE_ENV !== 'production') {
+  dotenv.config();
+}
+
+// Configuração SSL padrão para produção
+// O 'rejectUnauthorized: false' é necessário para aceitar certificados autoassinados,
+// comum em serviços de banco de dados gerenciados.
+const sslConfig = process.env.NODE_ENV === 'production'
+  ? { rejectUnauthorized: false }
+  : false;
 
 export const furnasPool = new Pool({
   host: process.env.DB_FURNAS_HOST,
@@ -9,6 +19,7 @@ export const furnasPool = new Pool({
   password: String(process.env.DB_FURNAS_PASSWORD),
   database: process.env.DB_FURNAS_NAME,
   port: Number(process.env.DB_FURNAS_PORT),
+  ssl: sslConfig, // Adicionado SSL
 });
 
 export const simaPool = new Pool({
@@ -17,6 +28,7 @@ export const simaPool = new Pool({
   password: String(process.env.DB_SIMA_PASSWORD),
   database: process.env.DB_SIMA_NAME,
   port: Number(process.env.DB_SIMA_PORT),
+  ssl: sslConfig, // Adicionado SSL
 });
 
 export const balcarPool = new Pool({
@@ -25,4 +37,5 @@ export const balcarPool = new Pool({
   password: String(process.env.DB_BALCAR_PASSWORD),
   database: process.env.DB_BALCAR_NAME,
   port: Number(process.env.DB_BALCAR_PORT),
+  ssl: sslConfig, // Adicionado SSL
 });
