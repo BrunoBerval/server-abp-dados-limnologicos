@@ -1,9 +1,14 @@
 import { Router } from "express";
-import {getAll, getById} from '../../controllers/sima/simaOffline.controller';
+import {getAll, getById, exportData} from '../../controllers/sima/simaOffline.controller';
+//import { cacheMiddleware } from "../../middlewares/cacheMiddleware";
 
 const router = Router();
 
+// rota com cache de 10 minutos (600 segundos)
+//router.get("/all", cacheMiddleware(600), getAll);
+
 router.get("/all", getAll);
 router.get("/:idsimaoffline", getById);
+router.post("/export", exportData);
 
 export default router;

@@ -4,25 +4,30 @@ import router from "./routes";
 import { errorHandler } from "./middlewares/errorHandler";
 import cors from "cors";
 //import { corsOptions } from "./configs/corsConfig";
+//import { corsOptions } from "./configs/corsConfig2";
 
-// Carrega .env somente local
-if(process.env.NODE_ENV !== 'production'){
-  dotenv.config();
-  console.log("Variáveis de ambiente carregadas do .env");
-}
+// --- REDIS: Inicializa a conexão ao importar o arquivo ---
+//import "./configs/redisClient";
+// --------------------------------------------------------
+
+// Carrega as variáveis de ambiente definidas no arquivo .env
+dotenv.config();
 
 // Inicializa a aplicação Express
 const app = express();
 
-// habilitar CORS em produção
+// habilitar CORS
 //app.use(cors(corsOptions));
-app.use(cors())
+app.use(cors());
+
+// Define a porta utilizada pelo servidor
+const PORT = process.env.PORT || 3000;
 
 // Middleware para permitir o envio de dados em formato JSON no corpo das requisições
 app.use(express.json());
 
 // Middleware para permitir o envio de dados em formato URL-encoded no corpo das requisições
-app.use(express.urlencoded({ extended: true }));
+//app.use(express.urlencoded({ extended: true }));
 
 // Rotas principais
 app.use("/api", router);
@@ -38,12 +43,7 @@ app.use((_req: Request, res: Response) => {
 // middleware de erro sempre por último
 app.use(errorHandler);
 
-// Define a porta: O Render VAI fornecer process.env.PORT
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
+// Inicializa o servidor na porta definida
+app.listen(PORT, function () {
+  console.log(`Servidor rodando em http://localhost:${process.env.HOST_PORT}`);
 });
-
-// Exporta o app para a Vercel (isso transforma o Express em uma Serverless Function)
-export default app;

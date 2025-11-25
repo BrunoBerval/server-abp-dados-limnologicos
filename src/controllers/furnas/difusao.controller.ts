@@ -1,150 +1,256 @@
 import { Request, Response } from "express";
-import { furnasPool } from "../../configs/db";
 import { logger } from "../../configs/logger";
+
+// 1. Importa os Serviços
+import { DataFormatterService } from "../../services/dataFormatterService";
+import { ExportService, ExportFileOptions } from "../../services/exportService";
+
+// 2. Importa o Model
+import { DifusaoModel } from "../../models/furnas/difusao.model";
 
 const PAGE_SIZE = Number(process.env.PAGE_SIZE) || 10;
 
-// Mapeamento
-const mapRowToDifusao = (row: any) => ({
-    idDifusao: row.iddifusao,
-    dataMedida: row.datamedida,
-    horaMedida: row.horamedida,
-    ch4: row.ch4,
-    co2: row.co2,
-    n2o: row.n2o,
-    ph: row.ph,
-    tempagua: row.tempagua,
-    tempar: row.tempar,
-    profundidade: row.profundidade,
-    altitude: row.altitude,
-    vento: row.vento,
-    
-    // Objeto Aninhado para o Sítio
-    sitio: row.idsitio ? {
-        idsitio: row.idsitio,
-        nome: row.sitio_nome,
-        lat: row.sitio_lat,
-        lng: row.sitio_lng,
-        descricao: row.sitio_descricao,
-    } : undefined,
-    
-    // Objeto Aninhado para a Campanha
-    campanha: row.idcampanha ? {
-        idcampanha: row.idcampanha,
-        nroCampanha: row.nrocampanha,
-        dataInicio: row.campanha_datainicio,
-        dataFim: row.campanha_datafim,
-    } : undefined,
+// --- ENDPOINTS ---
 
-    // Objeto Aninhado para o Reservatório
-    reservatorio: row.idreservatorio ? {
-        idreservatorio: row.idreservatorio,
-        nome: row.reservatorio_nome,
-    } : undefined,
-});
-
-// getAll
+/**
+ * Endpoint: getAll
+ * Busca dados paginados e filtrados.
+ */
 export const getAll = async (req: Request, res: Response): Promise<void> => {
-    try{
-        const page = parseInt(req.query.page as string) || 1;
-        const limit = parseInt(req.query.limit as string) || PAGE_SIZE;
-        const offset = (page - 1) * limit;
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || PAGE_SIZE;
 
-        const result = await furnasPool.query(
-            `
-            SELECT
-                a.idDifusao,
-                a.dataMedida,
-                a.horaMedida,
-                a.ch4,
-                a.co2,
-                a.n2o,
-                a.ph,
-                a.tempagua,
-                b.idsitio,
-                b.nome AS sitio_nome,
-                c.idcampanha,
-                c.nroCampanha
-            FROM tbdifusao a
-            LEFT JOIN tbsitio b ON a.idSitio = b.idSitio
-            LEFT JOIN tbcampanha c ON a.idCampanha = c.idCampanha
-            ORDER BY a.dataMedida DESC, a.horaMedida DESC
-            LIMIT $1 OFFSET $2;
-            `, [limit, offset],
-        );
+    // 1. Pede os dados paginados ao Model, passando os filtros
+    const { data: rawData, total } = await DifusaoModel.findPaginated({
+      filters: req.query, // O FilterService é aplicado dentro do Model
+      page,
+      limit,
+    });
 
-        const countResult = await furnasPool.query("SELECT COUNT(*) FROM tbdifusao",);
-        const total = Number(countResult.rows[0].count);
+    // 2. Formata os dados "crus" usando o Service
+    const data = rawData.map(DataFormatterService.formatListRow);
 
-        // Mapeia o resultado para o padrão aninhado, mantendo a listagem concisa
-        const data = result.rows.map((row: any) => ({
-            ...mapRowToDifusao(row),
-            sitio: row.idsitio ? { idsitio: row.idsitio, nome: row.sitio_nome } : undefined,
-            campanha: row.idcampanha ? { idcampanha: row.idcampanha, nroCampanha: row.nrocampanha } : undefined,
-            reservatorio: undefined,
-        }));
-
-        res.status(200).json({
-            success: true,
-            page, limit, total,
-            totalPages: Math.ceil(total / limit),
-            data,
-        });
-
-    }   catch(error:any){
-        logger.error(`Erro ao buscar dados de difusão:`,
-            {message: error.message, stack: error.stack,});
-
-        res.status(500).json({success: false, error:"Erro ao realizar operação.",});
-    }
+    // 3. Envia a resposta
+    res.status(200).json({
+      success: true,
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      data,
+    });
+  } catch (error: any) {
+    logger.error("Erro ao consultar tbdifusao", {
+      message: error.message,
+      stack: error.stack,
+    });
+    res.status(500).json({
+      success: false,
+      error: "Erro ao realizar operação.",
+    });
+  }
 };
 
-// getById
-export const getById = async (req: Request, res:Response): Promise<void> => {
-    try{
-        const idDifusao = Number(req.params.idDifusao);
-        if(isNaN(idDifusao)){
-            res.status(400).json({success: false, error: `ID ${req.params.idDifusao} inválido.`,});
-            return;
-        }
+/**
+ * Endpoint: getById
+ * Busca um único registro por ID.
+ */
+export const getById = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const id = Number(req.params.id);
 
-        const result = await furnasPool.query(
-            `
-            SELECT 
-                a.*,
-                b.idsitio,
-                b.nome AS sitio_nome,
-                b.descricao AS sitio_descricao,
-                b.lat AS sitio_lat,
-                b.lng AS sitio_lng,
-                c.idcampanha,
-                c.nroCampanha,
-                c.dataInicio AS campanha_datainicio,
-                c.dataFim As campanha_datafim,
-                d.idreservatorio,
-                d.nome AS reservatorio_nome
-            FROM tbdifusao a
-            LEFT JOIN tbsitio b ON a.idSitio = b.idSitio
-            LEFT JOIN tbcampanha c ON a.idCampanha = c.idCampanha
-            LEFT JOIN tbreservatorio d ON c.idReservatorio = d.idReservatorio
-            WHERE a.idDifusao = $1;
-            `, [idDifusao],
-        );
-
-        if(result.rows.length === 0){
-            res.status(404).json({success: false, error:"Registro de difusão não encontrado.",});
-            return;
-        }
-
-        // Mapeia o resultado único para o padrão aninhado
-        const data = mapRowToDifusao(result.rows[0]);
-
-        res.status(200).json({success: true, data,});
-
-    }   catch(error:any){
-        logger.error(`Erro ao buscar registro por ID ${req.params.idDifusao} na tabela de difusão.`, 
-            {message: error.message, stack: error.stack,});
-
-        res.status(500).json({success: false, error:"Erro ao realizar operação.",});
+    if (isNaN(id)) {
+      res.status(400).json({
+        success: false,
+        error: "ID inválido",
+      });
+      return;
     }
+
+    // 1. Pede o dado ao Model
+    const rawData = await DifusaoModel.findById(id);
+
+    // 2. Verifica se foi encontrado
+    if (!rawData) {
+      res.status(404).json({
+        success: false,
+        error: "Registro não encontrado",
+      });
+      return;
+    }
+
+    // 3. Retorna os dados crus
+    const data = rawData;
+
+    // 4. Envia a resposta
+    res.status(200).json({
+      success: true,
+      data,
+    });
+  } catch (error: any) {
+    logger.error("Erro ao consultar tbdifusao por id", {
+      message: error.message,
+      stack: error.stack,
+    });
+    res.status(500).json({
+      success: false,
+      error: "Erro ao realizar a operação.",
+    });
+  }
+};
+
+/**
+ * Endpoint: exportData
+ * Exporta dados para CSV ou XLSX, com base nos filtros.
+ */
+export const exportData = async (req: Request, res: Response): Promise<void> => {
+  try {
+    // 1. Extrai opções do body
+    const {
+      format,
+      range,
+      includeHeaders,
+      delimiter,
+      encoding,
+      filters,
+      page,
+      limit,
+    } = req.body as ExportFileOptions & {
+      range: "page" | "all";
+      filters: any;
+      page?: number;
+      limit?: number;
+    };
+
+    // Opções para o ExportService
+    const exportOptions: ExportFileOptions = {
+      format,
+      includeHeaders,
+      delimiter,
+      encoding,
+    };
+
+    let rawData: any[];
+
+    // 2. Busca os dados no Model com base no 'range'
+    if (range === "page") {
+      const { data } = await DifusaoModel.findPaginated({
+        filters: filters || {},
+        page: page || 1,
+        limit: limit || PAGE_SIZE,
+      });
+      rawData = data;
+    } else {
+      // range === 'all'
+      rawData = await DifusaoModel.findAll({
+        filters: filters || {},
+      });
+    }
+
+    // 3. Formata os dados para "lista"
+    const formattedData = rawData.map(DataFormatterService.formatListRow);
+
+    // 4. Gera o buffer do arquivo
+    const fileBuffer = await ExportService.generateExportFile(
+      formattedData,
+      exportOptions
+    );
+
+    // 5. Define os headers da resposta
+    const fileName = `export_furnas_difusao_${new Date()
+      .toISOString()
+      .slice(0, 10)}.${format}`;
+
+    if (format === "xlsx") {
+      res.setHeader(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      );
+    } else {
+      res.setHeader(
+        "Content-Type",
+        "text/csv; charset=" + (encoding || "utf-8")
+      );
+    }
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${fileName}"`
+    );
+
+    // 6. Envia o buffer como resposta
+    res.send(fileBuffer);
+  } catch (error: any) {
+    logger.error("Erro ao exportar dados de tbdifusao", {
+      message: error.message,
+      stack: error.stack,
+    });
+    res.status(500).json({
+      success: false,
+      error: "Erro ao gerar exportação.",
+    });
+  }
+};
+
+/**
+ * --- NOVO ENDPOINT DE ANALYTICS ---
+ * Endpoint: getAnalytics
+ * Retorna estatísticas agrupadas por Reservatório ou Sítio.
+ * Query Params: metric (obrigatório), groupBy (obrigatório), filterReservatorioId
+ */
+export const getAnalytics = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { metric, groupBy, filterReservatorioId } = req.query;
+
+    // 1. Validações Básicas
+    if (!metric) {
+      res.status(400).json({ 
+        success: false, 
+        error: "Parâmetro 'metric' é obrigatório." 
+      });
+      return;
+    }
+
+    if (groupBy !== 'reservatorio' && groupBy !== 'sitio') {
+      res.status(400).json({ 
+        success: false, 
+        error: "Parâmetro 'groupBy' deve ser 'reservatorio' ou 'sitio'." 
+      });
+      return;
+    }
+
+    // 2. Chama o Model de Agregação
+    const data = await DifusaoModel.getAnalyticsData({
+      metric: metric as string,
+      groupBy: groupBy as 'reservatorio' | 'sitio',
+      filterReservatorioId: filterReservatorioId ? Number(filterReservatorioId) : undefined
+    });
+
+    // 3. Retorna o JSON otimizado
+    res.status(200).json({
+      success: true,
+      groupBy,
+      metric,
+      totalGroups: data.length,
+      data
+    });
+
+  } catch (error: any) {
+    logger.error("Erro ao gerar analytics de Furnas (Difusão)", {
+      message: error.message,
+      stack: error.stack,
+      query: req.query
+    });
+
+    // Se for erro de métrica inválida (lançado pelo model), retorna 400
+    if (error.message && error.message.includes("Métrica inválida")) {
+      res.status(400).json({ success: false, error: error.message });
+      return;
+    }
+
+    res.status(500).json({
+      success: false,
+      error: "Erro ao processar dados analíticos.",
+    });
+  }
 };
